@@ -1,0 +1,11 @@
+---
+import Base from '../layouts/Base.astro';
+import WhatsOn from '../components/WhatsOn';
+import { getScreenings, toListing } from '../lib/data';
+import { dayKey } from '../lib/format';
+
+const listings = (await getScreenings(45)).map(toListing);
+---
+<Base title="What's On" description="Special screenings in Jakarta by day: festivals, cultural centres, retrospectives and one-night events, with ticket status.">
+  <WhatsOn client:load listings={listings} builtOn={dayKey(new Date())} />
+</Base>

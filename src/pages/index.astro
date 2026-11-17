@@ -1,0 +1,197 @@
+---
+import Base from '../layouts/Base.astro';
+import Hero from '../components/Hero';
+import PosterTile from '../components/PosterTile.astro';
+import Icon from '../components/Icon.astro';
+import { buildSlides, getEvents, getPosts, getScreenings, toListing, type Listing } from '../lib/data';
+import { addDays, dayKey, longDate, longDay, rupiah, shortDay, time } from '../lib/format';
+
+const now = new Date();
+const today = dayKey(now);
+const [screenings, events, posts] = await Promise.all([getScreenings(), getEvents(), getPosts(6)]);
+const slides = buildSlides(events, screenings, now);
+const listings = screenings.map(toListing);
+const upcoming = listings.filter((l) => l.day >= today);
+
+// "Playing today", else the next day with screenings, else the last day we listed.
+let featuredDay: string | null = null;
+let dayLabel = 'Playing today';
+if (upcoming.some((l) => l.day === today)) featuredDay = today;
+else if (upcoming.length) { featuredDay = upcoming[0].day; dayLabel = 'Next up'; }
+else if (listings.length) { featuredDay = listings[listings.length - 1].day; dayLabel = 'Last listed'; }
+
+const dayList = featuredDay ? listings.filter((l) => l.day === featuredDay) : [];
+const lead: Listing | undefined =
+  dayList.find((l) => l.guest) ?? dayList.find((l) => l.status !== 'sold_out') ?? dayList[0];
+const rest = dayList.filter((l) => l !== lead);
+const grid = rest.slice(0, 6);
+const also = rest.slice(6);
+
+// Coming up: one tile per film, after the featured day.
+const seenFilms = new Set<string>();
+const comingUp = upcoming.filter((l) => {
+  if (featuredDay && l.day <= featuredDay) return false;
+  const k = l.filmSlug ?? l.title;
+  if (seenFilms.has(k)) return false;
+  seenFilms.add(k);
+  return true;
+}).slice(0, 10);
+
+// Ticket sales opening in the next seven days, one per event (or film).
+const weekEnd = addDays(today, 7);
+const salesSeen = new Set<string>();
+const sales = screenings
+  .filter((s) => s.tickets_on_sale_at && s.tickets_on_sale_at > now.toISOString() && dayKey(s.tickets_on_sale_at) <= weekEnd)
+  .sort((a, b) => a.tickets_on_sale_at!.localeCompare(b.tickets_on_sale_at!))
+  .filter((s) => {
+    const k = s.event?.slug ?? s.id;
+    if (salesSeen.has(k)) return false;
+    salesSeen.add(k);
+    return true;
+  })
+  .slice(0, 3);
+
+// The weekly Arthouse band, when the series is running.
+const arthouse = events.find((e) => e.kind === 'series' && e.start_date && e.start_date <= today && (!e.end_date || e.end_date >= today));
+const arthouseNext = arthouse
+  ? screenings.find((s) => s.event?.slug === arthouse.slug && s.starts_at > now.toISOString())
+  : undefined;
+
+const notes = posts.filter((p) => p.kind === 'note').slice(0, 2);
+const blog = posts.filter((p) => !notes.includes(p)).slice(0, 2);
+const postDate = (iso: string) => longDate(dayKey(iso));
+const KIND: Record<string, string> = { guide: 'Festival guide', howto: 'How-to', interview: 'Interview', picks: 'Picks', news: 'News', note: 'Note' };
+---
+<Base>
+  <Hero client:load slides={slides} />
+
+  {notes.length > 0 && (
+    <section class="wrap" style="padding-top: 120px">
+      <div class="sec-head"><p class="label" style="margin: 0">From the projection room</p><a href="/blog" class="u t-small">All notes</a></div>
+      <div class="editorial">
+        {notes.map((p) => (
+          <a href={`/blog/${p.slug}`} style="display: block">
+            <div class="img" style={`aspect-ratio: 4 / 3${p.cover_url ? `; background: url('${p.cover_url}') center / cover` : ''}`}></div>
+            <h2 class="t-h2">{p.title}</h2>
+            {p.dek && <p class="t-body" style="margin-top: 16px; font-size: 17px">{p.dek}</p>}
+            <p class="t-small" style="margin-top: 16px">{[p.author, postDate(p.published_at)].filter(Boolean).join(' · ')}</p>
+          </a>
+        ))}
+      </div>
+    </section>
+  )}
+
+  {featuredDay && lead && (
+    <section class="wrap sec">
+      <div class="sec-head">
+        <div><p class="label">{dayLabel}</p><h2 class="t-h1" style="font-size: 64px">{longDay(featuredDay)}</h2></div>
+        <a href="/whats-on" class="u" style="color: var(--text-2)">Full calendar</a>
+      </div>
+      {dayLabel === 'Last listed' && (
+        <p class="t-body" style="margin: -16px 0 40px; max-width: 640px">Nothing is listed for the coming days yet. This is the most recent day we covered.</p>
+      )}
+      <div class="today">
+        <PosterTile item={lead} when={lead.time} large />
+        {grid.length > 0 && (
+          <div>
+            <div class="today-sm">
+              {grid.map((l) => (
+                <PosterTile
+                  item={l}
+                  when={[l.time, l.where.split(', ').slice(-1)[0]].join(' · ')}
+                  sub={l.meta}
+                />
+              ))}
+            </div>
+            {also.length > 0 && (
+              <p class="t-small" style="margin-top: 32px">
+                Also: {also.map((l) => `${l.title}, ${l.time}`).join('; ')}. <a href="/whats-on" class="u">All screenings</a>
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  )}
+
+  {arthouse && (
+    <section class="dark band">
+      <div class="band-art" style={arthouseNext?.film?.poster_url ? `background-image: url('${arthouseNext.film.poster_url}')` : undefined}></div>
+      <div class="wrap band-panel">
+        <div>
+          <p class="label">On the {arthouse.name} screen</p>
+          <h2 class="t-h1">{arthouseNext?.film?.title ?? arthouse.name}</h2>
+          <p class="t-lead" style="margin-top: 20px">
+            {arthouse.summary ?? 'One curated film a week.'}
+            {arthouseNext && ` Next: ${shortDay(dayKey(arthouseNext.starts_at))}, ${time(arthouseNext.starts_at)}.`}
+          </p>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px">
+            <a href="/whats-on" class="btn btn-a">Showtimes</a>
+            <a href="/di-bioskop" class="btn btn-o">Di Bioskop</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  )}
+
+  {sales.length > 0 && (
+    <section class="wrap sec">
+      <p class="label">Ticket sales this week</p>
+      <div class="panel3">
+        {sales.map((s) => (
+          <div>
+            <p class="t-h1" style="font-size: 56px">{shortDay(dayKey(s.tickets_on_sale_at!))}</p>
+            <p class="t-meta">{time(s.tickets_on_sale_at!)} WIB</p>
+            <p class="t-title" style="margin-top: 24px">{s.event?.name ?? s.film?.title}</p>
+            <p class="t-small" style="margin-top: 6px">{[s.venue?.name, rupiah(s.price_idr)].filter(Boolean).join(' · ')}</p>
+            {(s.ticket_url || s.event?.official_url) && (
+              <a href={s.ticket_url || s.event?.official_url!} target="_blank" rel="noopener noreferrer" class="u" style="display: inline-flex; gap: 8px; align-items: center; margin-top: 20px; color: var(--text-2)">
+                <Icon name="ext" />Where to buy
+              </a>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  )}
+
+  {comingUp.length > 0 && (
+    <section class="sec">
+      <div class="wrap sec-head">
+        <div><p class="label">Coming up</p><h2 class="t-h1" style="font-size: 64px">On the calendar</h2></div>
+        <a href="/whats-on" class="u" style="color: var(--text-2)">Full calendar</a>
+      </div>
+      <div class="hscroll">
+        {comingUp.map((l) => <PosterTile item={l} when={shortDay(l.day)} sub={l.where} />)}
+      </div>
+    </section>
+  )}
+
+  {blog.length > 0 && (
+    <section class="dark" style="margin-top: 144px; padding: 112px 0">
+      <div class="wrap">
+        <div class="sec-head"><p class="label" style="margin: 0">The blog</p><a href="/blog" class="u t-small">All posts</a></div>
+        <div class="editorial">
+          {blog.map((p) => (
+            <a href={`/blog/${p.slug}`} style="display: block">
+              <div class="img" style={`aspect-ratio: 3 / 2${p.cover_url ? `; background: url('${p.cover_url}') center / cover` : ''}`}></div>
+              <p class="t-small" style="margin-top: 20px">{KIND[p.kind] ?? p.kind} · {postDate(p.published_at)}</p>
+              <p class="t-h2" style="margin-top: 8px">{p.title}</p>
+              {p.dek && <p class="t-body" style="margin-top: 12px">{p.dek}</p>}
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <section id="alerts" class="wrap sec">
+    <div class="alerts">
+      <h2 class="t-display" style="font-size: 96px">Know when tickets go on sale.</h2>
+      <div>
+        <p class="t-body">A WhatsApp message the moment sales open, and a short email on Fridays. Alerts open soon.</p>
+        <a href="/alerts" class="btn btn-o" style="margin-top: 24px"><Icon name="bell" />How alerts will work</a>
+      </div>
+    </div>
+  </section>
+</Base>

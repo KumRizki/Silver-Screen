@@ -1,0 +1,9 @@
+---
+interface Props { size?: 'header' | 'footer' }
+const { size = 'header' } = Astro.props;
+const [the, script] = size === 'footer' ? [32, 80] : [18, 42];
+---
+<a href="/" class="logo" aria-label="The Silver Screen, home">
+  <span class="the" style={`font-size: ${the}px`}>The</span>
+  <span class="script" style={`font-size: ${script}px`}>Silver Screen</span>
+</a>

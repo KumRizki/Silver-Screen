@@ -1,0 +1,27 @@
+---
+import Logo from './Logo.astro';
+import Icon from './Icon.astro';
+import { NAV } from '../lib/nav';
+
+const path = Astro.url.pathname.replace(/\/$/, '') || '/';
+const current = (href: string) => (path === href || path.startsWith(href + '/') ? 'page' : undefined);
+---
+<div class="dark">
+  <header class="wrap site-header">
+    <Logo />
+    <nav aria-label="Main" class="site-nav">
+      {NAV.map((n) => <a href={n.href} aria-current={current(n.href)}>{n.label}</a>)}
+    </nav>
+    <div class="site-tools">
+      <a href="/search" aria-label="Search" class="btn btn-o btn-i"><Icon name="search" /></a>
+      <a href="/alerts" class="hide-sm" aria-current={current('/alerts')}>Alerts</a>
+      <details class="menu">
+        <summary class="btn btn-o btn-i" aria-label="Menu"><Icon name="menu" /></summary>
+        <nav class="menu-panel" aria-label="Menu">
+          {NAV.map((n) => <a href={n.href} aria-current={current(n.href)}>{n.label}</a>)}
+          <a href="/alerts">Alerts</a>
+        </nav>
+      </details>
+    </div>
+  </header>
+</div>
