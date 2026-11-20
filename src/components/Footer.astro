@@ -1,0 +1,24 @@
+---
+import Logo from './Logo.astro';
+import { NAV } from '../lib/nav';
+---
+<footer class="dark site-footer">
+  <div class="wrap footer-grid">
+    <Logo size="footer" />
+    <div class="footer-col">
+      {NAV.map((n) => <a href={n.href}>{n.label}</a>)}
+    </div>
+    <div class="footer-col">
+      <a href="/about">About</a>
+      <a href="/submit">Submit a screening</a>
+      <a href="/about#contact">Contact</a>
+      <a href="/about#privacy">Privacy</a>
+    </div>
+    <div class="footer-col">
+      <a href="/alerts">Alerts</a>
+    </div>
+  </div>
+  <p class="wrap t-small" style="padding-bottom: 48px">
+    Independent listings, not affiliated with any cinema or festival. Check details with the organizer.
+  </p>
+</footer>

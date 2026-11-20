@@ -1,0 +1,33 @@
+---
+import { tone } from '../lib/format';
+import { statusLabel, type Listing } from '../lib/data';
+
+interface Props {
+  item: Listing;
+  when: string; // e.g. "13:00 · Audi 6" or "From 4 December"
+  sub?: string;
+  large?: boolean;
+}
+const { item, when, sub, large = false } = Astro.props;
+const label = statusLabel(item.status);
+const style = item.posterUrl
+  ? `background-image: url('${item.posterUrl}')`
+  : `background: ${tone(item.title)}`;
+const href = `/whats-on#s-${item.id}`;
+---
+{large ? (
+  <a href={href} class="tile">
+    <div class:list={['poster lg', { 'has-img': item.posterUrl }]} style={style}><span class="pt">{item.title}</span></div>
+    {item.eventName && <p style="margin: 20px 0 0; font-size: 15px; color: var(--amber-text)">{[item.eventName, item.where].filter(Boolean).join(' · ')}</p>}
+    <p class="t-h1" style="margin-top: 8px; font-size: 64px">{item.title}</p>
+    {item.meta && <p class="t-meta" style="margin-top: 8px">{item.meta}</p>}
+    <div class="times"><span>{item.time}</span>{label && <span class="few">{label}</span>}</div>
+  </a>
+) : (
+  <a href={href} class="tile" style={item.status === 'sold_out' ? 'opacity: .55' : undefined}>
+    <div class:list={['poster', { 'has-img': item.posterUrl }]} style={style}><span class="pt">{item.title}</span></div>
+    <p class="tile-when">{when}{label && <> · <span class={item.status === 'few_left' ? 'few' : undefined}>{label}</span></>}</p>
+    <p class="t-title">{item.title}</p>
+    {sub && <p class="t-small">{sub}</p>}
+  </a>
+)}

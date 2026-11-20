@@ -1,0 +1,28 @@
+---
+// Holding pages for sections that are planned but not built yet,
+// so every link in the header and footer goes somewhere real.
+import Base from '../layouts/Base.astro';
+import { COMING_SOON } from '../lib/nav';
+
+export function getStaticPaths() {
+  return Object.keys(COMING_SOON).map((section) => ({ params: { section } }));
+}
+
+const { section } = Astro.params;
+const page = COMING_SOON[section as string];
+---
+<Base title={page.title} description={page.line}>
+  <section class="wrap page-head">
+    <div>
+      <h1 class="t-h1">{page.title}</h1>
+      <p class="t-lead" style="margin-top: 12px; max-width: 640px">{page.line}</p>
+    </div>
+  </section>
+  <div class="wrap">
+    <div class="empty">
+      <p class="t-h3">This page is on its way.</p>
+      <p class="t-body" style="margin-top: 12px">In the meantime, every listed screening is in the calendar.</p>
+      <a href="/whats-on" class="btn btn-a" style="margin-top: 24px">What's On</a>
+    </div>
+  </div>
+</Base>
