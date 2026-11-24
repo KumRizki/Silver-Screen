@@ -1,18 +1,21 @@
-# Rebuilds the site every morning so "Playing today" and the hero stay current.
+# Rebuilds the site twice a day: just after midnight, so "Playing today" and the
+# hero move to the new day, and after the 07:35 CGV Arthouse check has loaded
+# that day's screenings.
 # Needs a Cloudflare Pages deploy hook saved as the repository secret CF_DEPLOY_HOOK
-# (Cloudflare Pages → project → Settings → Builds → Deploy hooks).
+# (Cloudflare → Workers & Pages → silver-screen → Settings → Build → Deploy hooks).
 name: Daily rebuild
 
 on:
   schedule:
     - cron: '7 17 * * *' # 00:07 WIB
+    - cron: '7 1 * * *'  # 08:07 WIB, after the CGV Arthouse check
   workflow_dispatch:
 
 jobs:
   rebuild:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Cloudflare Pages build
+      - name: Trigger Cloudflare build
         env:
           HOOK: ${{ secrets.CF_DEPLOY_HOOK }}
         run: |
