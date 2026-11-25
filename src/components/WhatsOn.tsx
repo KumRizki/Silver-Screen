@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Icon from './Icon';
 import type { Listing } from '../lib/data';
-import { addDays, dayKey, dayNum, longDay, weekday, weekdayShort } from '../lib/format';
+import { addDays, dayKey, dayNum, longDay, tone, weekday, weekdayShort } from '../lib/format';
 
 type Range = 'today' | 'weekend' | 'week' | 'all';
 
@@ -63,11 +63,16 @@ function Row({ l, past = false }: { l: Listing; past?: boolean }) {
   return (
     <div id={`s-${l.id}`} className={'r r-screen' + (out || past ? ' dim' : '')}>
       <span className="t-time">{l.time}</span>
-      <div>
-        {l.eventName && <p className="t-small" style={{ marginBottom: 4 }}>{l.eventName}</p>}
-        <p className="t-title">{l.title}</p>
-        {l.meta && <p className="t-meta">{l.meta}</p>}
-      </div>
+      <a href={l.href} className="r-film">
+        <span className="thumb" style={{ background: tone(l.title) }}>
+          {l.posterUrl && <img src={l.posterUrl} alt="" loading="lazy" decoding="async" />}
+        </span>
+        <span>
+          {l.eventName && <span className="t-small" style={{ display: 'block', marginBottom: 4 }}>{l.eventName}</span>}
+          <span className="t-title" style={{ display: 'block' }}>{l.title}</span>
+          {l.meta && <span className="t-meta" style={{ display: 'block' }}>{l.meta}</span>}
+        </span>
+      </a>
       <span className="r-where" style={{ fontSize: 15 }}>{l.where}</span>
       <span className="r-status">{status}</span>
       <span className="r-action">{action}</span>

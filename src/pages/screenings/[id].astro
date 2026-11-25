@@ -1,0 +1,170 @@
+---
+import Base from '../../layouts/Base.astro';
+import Icon from '../../components/Icon.astro';
+import WideArt from '../../components/WideArt.astro';
+import { art, getScreenings, statusLabel, type Screening } from '../../lib/data';
+import { dayKey, longDay, rupiah, runtime, subtitleText, time } from '../../lib/format';
+
+export async function getStaticPaths() {
+  const all = await getScreenings(60);
+  return all.map((s) => ({ params: { id: s.id }, props: { s, all } }));
+}
+
+interface Props { s: Screening; all: Screening[] }
+const { s, all } = Astro.props;
+const film = s.film;
+const title = film?.title ?? 'Screening';
+const now = new Date().toISOString();
+const past = s.starts_at < now;
+const day = dayKey(s.starts_at);
+const mins = film?.runtime_min ?? 120;
+const ends = new Date(new Date(s.starts_at).getTime() + mins * 60_000);
+
+const directors = film?.directors?.filter(Boolean).join(', ') || null;
+const meta = [directors, film?.year, film?.countries?.join(', '), runtime(film?.runtime_min), subtitleText(s.subtitles)]
+  .filter(Boolean).join(' · ');
+const where = [s.venue?.name, s.screen].filter(Boolean).join(', ');
+const price = rupiah(s.price_idr);
+const label = statusLabel(s.ticket_status);
+
+const ticketUrl = s.ticket_url || s.event?.official_url || null;
+const host = (() => {
+  try { return ticketUrl ? new URL(ticketUrl).hostname.replace(/^www\./, '') : ''; } catch { return ''; }
+})();
+const buyLabel = s.ticket_status === 'free_rsvp' ? 'RSVP'
+  : host.endsWith('cgv.id') ? 'Buy on CGV'
+  : s.price_idr === 0 ? `Details on ${host}`
+  : 'Tickets';
+
+const others = all.filter((o) => o.film?.slug === film?.slug && o.id !== s.id);
+const sameDay = all.filter((o) => o.event?.slug && o.event.slug === s.event?.slug && o.id !== s.id && dayKey(o.starts_at) === day);
+
+// Add to calendar: a small .ics file, built at build time.
+const ics = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+const pageUrl = new URL(`/screenings/${s.id}`, Astro.site).toString();
+const esc = (t: string) => t.replace(/[,;\\]/g, (m) => '\\' + m);
+const calendar = [
+  'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//The Silver Screen//EN', 'BEGIN:VEVENT',
+  `UID:${s.id}@silverscreenjkt.com`, `DTSTAMP:${ics(new Date())}`,
+  `DTSTART:${ics(new Date(s.starts_at))}`, `DTEND:${ics(ends)}`,
+  `SUMMARY:${esc(title)}`, `LOCATION:${esc([s.venue?.name, s.venue?.address].filter(Boolean).join(', '))}`,
+  `URL:${pageUrl}`, 'END:VEVENT', 'END:VCALENDAR',
+].join('\r\n');
+const calHref = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(calendar);
+const checked = s.last_verified_at ? longDay(dayKey(s.last_verified_at)) : null;
+---
+<Base
+  title={`${title}, ${longDay(day)}`}
+  description={`${title} at ${where}, ${longDay(day)} ${time(s.starts_at)}.${s.event ? ` Part of ${s.event.name}.` : ''}`}
+  image={art(film).image}
+>
+  <section class="wrap detail-head">
+    {s.event && <p class="t-kicker rise">{s.event.name}</p>}
+    <h1 class:list={['t-display detail-title rise', { long: title.length > 22 }]}>{title}</h1>
+    {meta && <p class="t-lead rise" style="margin-top: 24px; color: var(--muted)">{meta}</p>}
+  </section>
+
+  <div class="wrap" style="padding-bottom: 56px"><WideArt film={film} /></div>
+
+  <div class="wrap detail-grid">
+    <div class="detail-main">
+      <section class="reveal">
+        <h2 class="t-h3 detail-h">About the film</h2>
+        <div class="card pad">
+          {film?.synopsis_en && <p class="t-lead" style="max-width: 620px; margin-bottom: 32px">{film.synopsis_en}</p>}
+          <dl class="facts">
+            {directors && <div><dt>{film?.directors && film.directors.length > 1 ? 'Directors' : 'Director'}</dt><dd>{directors}</dd></div>}
+            {film?.year && <div><dt>Year</dt><dd>{film.year}</dd></div>}
+            {film?.countries?.length ? <div><dt>Country</dt><dd>{film.countries.join(', ')}</dd></div> : null}
+            {film?.runtime_min && <div><dt>Runtime</dt><dd>{runtime(film.runtime_min)}</dd></div>}
+            {s.audio_language && <div><dt>Language</dt><dd>{s.audio_language}</dd></div>}
+            <div><dt>Subtitles</dt><dd>{subtitleText(s.subtitles) ?? 'Not listed'}</dd></div>
+          </dl>
+          {film && <a href={`/films/${film.slug}`} class="u" style="display: inline-block; margin-top: 28px">More about {film.title}</a>}
+        </div>
+      </section>
+
+      {others.length > 0 && (
+        <section class="reveal">
+          <h2 class="t-h3 detail-h">Other screenings</h2>
+          <div class="card list">
+            {others.map((o) => (
+              <a href={`/screenings/${o.id}`} class:list={['r r-3', { dim: o.starts_at < now }]}>
+                <span style="font-size: 18px">{time(o.starts_at)}</span>
+                <span>{longDay(dayKey(o.starts_at))}{o.venue && ` · ${o.venue.name}`}</span>
+                <span class="t-small">{statusLabel(o.ticket_status) ?? (o.starts_at < now ? 'Shown' : '')}</span>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {s.venue && (
+        <section class="reveal">
+          <h2 class="t-h3 detail-h">Getting there</h2>
+          <div class="card pad">
+            <p style="margin: 0; font-size: 20px; font-weight: 600; display: flex; gap: 10px; align-items: center"><Icon name="pin" />{s.venue.name}</p>
+            {s.venue.address && <p class="t-body" style="margin-top: 10px">{s.venue.address}</p>}
+            {s.venue.transit && <p class="t-body" style="margin-top: 6px">{s.venue.transit}</p>}
+            <a class="u" style="display: inline-block; margin-top: 16px" target="_blank" rel="noopener noreferrer"
+               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([s.venue.name, s.venue.address ?? 'Jakarta'].join(', '))}`}>Open in Maps</a>
+          </div>
+        </section>
+      )}
+
+      {sameDay.length > 0 && (
+        <section class="reveal">
+          <h2 class="t-h3 detail-h">Also at {s.event?.name} that day</h2>
+          <div class="card list">
+            {sameDay.map((o) => (
+              <a href={`/screenings/${o.id}`} class="r r-3">
+                <span style="font-size: 18px">{time(o.starts_at)}</span>
+                <span class="t-title">{o.film?.title}</span>
+                <span class="t-small">{o.screen ?? o.venue?.name}</span>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+
+    <aside aria-label="Tickets" class="card ticket">
+      <div style="padding: 20px 16px 8px">
+        <p style="margin: 0; font-size: 17px">{longDay(day)}</p>
+        <p class="t-display" style="margin-top: 8px; font-size: 88px; line-height: 1">{time(s.starts_at)}</p>
+        <p class="t-meta" style="margin-top: 8px">{past ? 'This screening has passed.' : `Ends about ${time(ends)}`}</p>
+      </div>
+      <dl class="kv" style="grid-template-columns: 72px 1fr; padding: 20px 16px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule)">
+        <dt>Where</dt><dd>{where || 'To be confirmed'}</dd>
+        {price && <><dt>Price</dt><dd>{price === 'Free' ? 'Free entry' : price}</dd></>}
+        {label && <><dt>Seats</dt><dd><span class:list={['st', s.ticket_status === 'few_left' ? 'st-few' : 'st-out']}>{label}</span></dd></>}
+      </dl>
+      {!past && ticketUrl && s.ticket_status !== 'sold_out' && (
+        <a href={ticketUrl} target="_blank" rel="noopener noreferrer" class="btn btn-a" style="margin-top: 8px">{buyLabel}<Icon name="ext" /></a>
+      )}
+      {!past && (
+        <div class="g2" style="gap: 12px">
+          <a href={calHref} download={`${film?.slug ?? 'screening'}.ics`} class="btn btn-o"><Icon name="cal" />Calendar</a>
+          <button type="button" class="btn btn-o" data-share={pageUrl} data-title={title}><Icon name="share" /><span>Share</span></button>
+        </div>
+      )}
+      <p class="t-small" style="padding: 8px 16px 12px; line-height: 1.6">
+        {host && <>Listing from <a href={s.ticket_url || s.event?.official_url!} class="u" target="_blank" rel="noopener noreferrer">{host}</a>{checked && `, checked ${checked}`}. </>}
+        Details can change; check with the organizer.
+      </p>
+    </aside>
+  </div>
+
+  <script is:inline>
+    document.querySelectorAll('[data-share]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var url = b.getAttribute('data-share'), title = b.getAttribute('data-title');
+        if (navigator.share) { navigator.share({ title: title, url: url }).catch(function () {}); return; }
+        navigator.clipboard && navigator.clipboard.writeText(url).then(function () {
+          var l = b.querySelector('span'); l.textContent = 'Link copied';
+          setTimeout(function () { l.textContent = 'Share'; }, 2000);
+        });
+      });
+    });
+  </script>
+</Base>

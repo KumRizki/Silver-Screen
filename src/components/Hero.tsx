@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Icon from './Icon';
 import type { Slide } from '../lib/data';
 import { countdown } from '../lib/format';
@@ -17,18 +17,18 @@ export default function Hero({ slides, seconds = 7 }: Props) {
   const [idx, setIdx] = useState(0);
   const [paused, setPaused] = useState(false);
   const [left, setLeft] = useState<string | null>(null);
-  const reduced = useRef(false);
+  const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
-    reduced.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   }, []);
 
   // Autoplay, paused on hover, keyboard focus, or reduced-motion preference.
   useEffect(() => {
-    if (n < 2 || paused || reduced.current) return;
+    if (n < 2 || paused || reduced) return;
     const t = window.setTimeout(() => setIdx((i) => (i + 1) % n), seconds * 1000);
     return () => window.clearTimeout(t);
-  }, [idx, paused, n, seconds]);
+  }, [idx, paused, n, seconds, reduced]);
 
   const cur = slides[idx];
 
@@ -43,10 +43,11 @@ export default function Hero({ slides, seconds = 7 }: Props) {
 
   if (!n) return null;
   const go = (i: number) => setIdx((i + n) % n);
+  const autoplaying = n > 1 && !paused && !reduced;
 
   return (
     <section
-      className="dark"
+      className="dark hero"
       aria-roledescription="carousel"
       aria-label="Highlights"
       onMouseEnter={() => setPaused(true)}
@@ -62,24 +63,26 @@ export default function Hero({ slides, seconds = 7 }: Props) {
           {slides.map((s, i) => (
             <div
               key={i}
-              className={'hero-slide' + (s.image ? '' : ' plain')}
+              className={['hero-slide', s.imageKind ?? 'plain', i === idx ? 'on' : ''].join(' ')}
               aria-hidden={i !== idx}
-              style={{
-                flex: `0 0 ${100 / n}%`,
-                backgroundColor: s.bg,
-                backgroundImage: s.image ? `url("${s.image}")` : undefined,
-              }}
-            />
+              style={{ flex: `0 0 ${100 / n}%`, backgroundColor: s.bg }}
+            >
+              {s.image && <div className="hero-bg" style={{ backgroundImage: `url("${s.image}")` }} />}
+              {s.image && s.imageKind === 'poster' && (
+                <img className="hero-poster" src={s.image} alt="" loading={i === 0 ? 'eager' : 'lazy'} />
+              )}
+            </div>
           ))}
         </div>
+        {cur.credit && <span className="hero-credit">{cur.credit}</span>}
         <div className="hero-copy">
           <div className="wrap">
-            <div className="hero-text" aria-live={paused ? 'polite' : 'off'}>
-              <p className="t-kicker">{cur.kicker}</p>
-              <h1 className={'t-display' + (cur.title.length > 28 ? ' long' : '')}>{cur.title}</h1>
-              {cur.line && <p className="t-lead" style={{ marginTop: 24, maxWidth: 560 }}>{cur.line}</p>}
-              {left && <p className="hero-countdown">Opens in {left}</p>}
-              <div className="hero-actions">
+            <div key={idx} className={'hero-text' + (cur.imageKind === 'poster' ? ' beside-poster' : '')} aria-live={paused ? 'polite' : 'off'}>
+              <p className="t-kicker rise">{cur.kicker}</p>
+              <h1 className={'t-display rise' + (cur.title.length > 28 ? ' long' : '')}>{cur.title}</h1>
+              {cur.line && <p className="t-lead rise" style={{ marginTop: 24, maxWidth: 560 }}>{cur.line}</p>}
+              {left && <p className="hero-countdown rise">Opens in {left}</p>}
+              <div className="hero-actions rise">
                 <a className="btn btn-a" {...linkProps(cur.cta.href)}>{cur.cta.label}</a>
                 {cur.cta2 && <a className="btn btn-o" {...linkProps(cur.cta2.href)}>{cur.cta2.label}</a>}
               </div>
@@ -104,6 +107,15 @@ export default function Hero({ slides, seconds = 7 }: Props) {
               aria-label={`Highlight ${i + 1}: ${s.title}`}
               onClick={() => go(i)}
             >
+              <span className="hero-bar" aria-hidden="true">
+                {i === idx && (
+                  <span
+                    key={`${idx}-${autoplaying}`}
+                    className={autoplaying ? 'fill run' : 'fill'}
+                    style={{ animationDuration: `${seconds}s` }}
+                  />
+                )}
+              </span>
               <span style={{ fontSize: 14 }}>{s.kicker}</span>
               <span className="t-title">{s.title}</span>
             </button>
