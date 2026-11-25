@@ -13,13 +13,20 @@ export interface Film {
   year: number | null;
   directors: string[] | null;
   runtime_min: number | null;
+  countries: string[] | null;
+  synopsis_en: string | null;
   poster_url: string | null;
+  poster_credit: string | null;
+  still_url: string | null;
+  still_credit: string | null;
 }
 
 export interface Venue {
   slug: string;
   name: string;
   area: string | null;
+  address: string | null;
+  transit: string | null;
 }
 
 export interface EventInfo {
@@ -40,6 +47,8 @@ export interface Screening {
   price_idr: number | null;
   ticket_status: TicketStatus;
   ticket_url: string | null;
+  audio_language: string | null;
+  last_verified_at: string | null;
   tickets_on_sale_at: string | null;
   guest_note: string | null;
   featured_until: string | null;
@@ -66,7 +75,9 @@ export interface Listing {
   time: string;
   title: string;
   filmSlug: string | null;
-  posterUrl: string | null;
+  posterUrl: string | null; // portrait poster, else the still
+  posterIsStill: boolean;
+  href: string; // screening page
   meta: string; // director · runtime · subtitles
   where: string; // venue, screen
   eventName: string | null;
@@ -80,10 +91,11 @@ export interface Listing {
 }
 
 const SCREENING_FIELDS = `
-  id, starts_at, screen, subtitles, price_idr, ticket_status, ticket_url,
-  tickets_on_sale_at, guest_note, featured_until,
-  film:films ( slug, title, original_title, year, directors, runtime_min, poster_url ),
-  venue:venues ( slug, name, area ),
+  id, starts_at, screen, subtitles, audio_language, price_idr, ticket_status, ticket_url,
+  tickets_on_sale_at, guest_note, featured_until, last_verified_at,
+  film:films ( slug, title, original_title, year, countries, directors, runtime_min, synopsis_en,
+               poster_url, poster_credit, still_url, still_credit ),
+  venue:venues ( slug, name, area, address, transit ),
   event:events ( slug, name, kind, start_date, end_date, summary, official_url )
 `;
 
@@ -162,7 +174,9 @@ export function toListing(s: Screening): Listing {
     time: time(s.starts_at),
     title: film?.title ?? 'Untitled',
     filmSlug: film?.slug ?? null,
-    posterUrl: film?.poster_url ?? null,
+    posterUrl: film?.poster_url ?? film?.still_url ?? null,
+    posterIsStill: !film?.poster_url && !!film?.still_url,
+    href: `/screenings/${s.id}`,
     meta,
     where,
     eventName: s.event?.name ?? null,
@@ -194,7 +208,16 @@ export interface Slide {
   cta2?: { label: string; href: string };
   countdownTo?: string; // ISO time; the hero counts down to it on the client
   image?: string | null;
+  imageKind?: 'still' | 'poster' | null;
+  credit?: string | null;
   bg: string;
+}
+
+/** Best artwork for wide layouts: a landscape still, else the poster. */
+export function art(f: Film | null | undefined): Pick<Slide, 'image' | 'imageKind' | 'credit'> {
+  if (f?.still_url) return { image: f.still_url, imageKind: 'still', credit: f.still_credit };
+  if (f?.poster_url) return { image: f.poster_url, imageKind: 'poster', credit: f.poster_credit };
+  return { image: null, imageKind: null, credit: null };
 }
 
 const isLive = (e: EventInfo, today: string) =>
@@ -210,8 +233,14 @@ export function buildSlides(events: EventInfo[], screenings: Screening[], now = 
   const today = dayKey(now);
   const slides: Slide[] = [];
   const seen = new Set<string>();
-  const posterFor = (slug: string) =>
-    screenings.find((s) => s.event?.slug === slug && s.film?.poster_url)?.film?.poster_url ?? null;
+  // An event's artwork: its first upcoming film with a still, else any artwork.
+  const eventArt = (slug: string) => {
+    const ofEvent = screenings.filter((s) => s.event?.slug === slug);
+    const upcoming = ofEvent.filter((s) => s.starts_at > now.toISOString());
+    const pick = [...upcoming, ...ofEvent].find((s) => s.film?.still_url)
+      ?? [...upcoming, ...ofEvent].find((s) => s.film?.poster_url);
+    return art(pick?.film);
+  };
 
   // 1. Ticket sales opening in the next 48 hours.
   const soon = screenings
@@ -234,7 +263,7 @@ export function buildSlides(events: EventInfo[], screenings: Screening[], now = 
       cta: { label: 'Buying tickets', href: s.ticket_url || s.event?.official_url || '/whats-on' },
       cta2: { label: 'Schedule', href: '/whats-on' },
       countdownTo: s.tickets_on_sale_at!,
-      image: s.film?.poster_url,
+      ...art(s.film),
       bg: '#1A1C1F',
     });
   }
@@ -249,7 +278,7 @@ export function buildSlides(events: EventInfo[], screenings: Screening[], now = 
       line: e.summary ?? `Until ${longDate(e.end_date!)}.`,
       cta: { label: "Today's schedule", href: '/whats-on' },
       cta2: e.official_url ? { label: 'Festival site', href: e.official_url } : undefined,
-      image: posterFor(e.slug),
+      ...eventArt(e.slug),
       bg: '#1E1B17',
     });
   }
@@ -269,7 +298,7 @@ export function buildSlides(events: EventInfo[], screenings: Screening[], now = 
       line: `${longDate(dayKey(s.starts_at))}, ${time(s.starts_at)} at ${s.venue?.name ?? 'venue to be confirmed'}.`,
       cta: { label: 'Tickets', href: s.ticket_url || '/whats-on' },
       cta2: { label: 'Schedule', href: '/whats-on' },
-      image: s.film?.poster_url,
+      ...art(s.film),
       bg: '#1F1918',
     });
   }
@@ -284,7 +313,7 @@ export function buildSlides(events: EventInfo[], screenings: Screening[], now = 
       line: e.summary ?? (e.end_date ? `${longDate(e.start_date!)} to ${longDate(e.end_date)}.` : ''),
       cta: { label: 'Lineup', href: '/whats-on' },
       cta2: e.official_url ? { label: 'Festival site', href: e.official_url } : undefined,
-      image: posterFor(e.slug),
+      ...eventArt(e.slug),
       bg: '#1C1A1F',
     });
   }
@@ -300,7 +329,7 @@ export function buildSlides(events: EventInfo[], screenings: Screening[], now = 
       line: e.summary ?? '',
       cta: { label: 'Showtimes', href: '/whats-on' },
       cta2: e.official_url ? { label: 'Details', href: e.official_url } : undefined,
-      image: next?.film?.poster_url ?? posterFor(e.slug),
+      ...(art(next?.film).image ? art(next?.film) : eventArt(e.slug)),
       bg: '#1C1C17',
     });
   }

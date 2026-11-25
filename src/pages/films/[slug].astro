@@ -1,0 +1,92 @@
+---
+import Base from '../../layouts/Base.astro';
+import Icon from '../../components/Icon.astro';
+import WideArt from '../../components/WideArt.astro';
+import { art, getScreenings, statusLabel, type Screening } from '../../lib/data';
+import { dayKey, longDay, runtime, subtitleText, time, tone } from '../../lib/format';
+
+export async function getStaticPaths() {
+  const all = await getScreenings(60);
+  const byFilm = new Map<string, Screening[]>();
+  for (const s of all) {
+    if (!s.film) continue;
+    if (!byFilm.has(s.film.slug)) byFilm.set(s.film.slug, []);
+    byFilm.get(s.film.slug)!.push(s);
+  }
+  return [...byFilm.entries()].map(([slug, list]) => ({ params: { slug }, props: { list } }));
+}
+
+interface Props { list: Screening[] }
+const { list } = Astro.props;
+const film = list[0].film!;
+const now = new Date().toISOString();
+const upcoming = list.filter((s) => s.starts_at >= now);
+const earlier = list.filter((s) => s.starts_at < now).reverse();
+const next = upcoming[0];
+
+const directors = film.directors?.filter(Boolean).join(', ') || null;
+const meta = [directors, film.year, film.countries?.join(', '), runtime(film.runtime_min)].filter(Boolean).join(' · ');
+const poster = film.poster_url;
+const letterboxd = `https://letterboxd.com/search/films/${encodeURIComponent(film.title)}/`;
+const hasStill = Boolean(film.still_url);
+---
+<Base title={film.title} description={`${film.title}${directors ? `, directed by ${directors}` : ''}: where and when it screens in Jakarta.`} image={art(film).image}>
+  <p class="wrap crumbs"><a href="/whats-on">What's On</a> / Films</p>
+
+  <section class:list={['wrap film-head', { 'no-poster': !poster }]}>
+    {poster && (
+      <div class="poster has-img rise" style={`background: ${tone(film.title)}`}>
+        <img src={poster} alt={`${film.title}, poster`} decoding="async" />
+      </div>
+    )}
+    <div>
+      <h1 class:list={['t-display rise', { long: film.title.length > 22 }]}>{film.title}</h1>
+      {film.original_title && film.original_title !== film.title && <p class="t-lead rise" style="margin-top: 12px">{film.original_title}</p>}
+      {meta && <p class="t-lead rise" style="margin-top: 20px; color: var(--muted)">{meta}</p>}
+      {film.synopsis_en && <p class="t-lead rise" style="margin-top: 32px; max-width: 600px">{film.synopsis_en}</p>}
+      <div class="rise" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 32px">
+        {next && <a href={`/screenings/${next.id}`} class="btn btn-a">Next: {longDay(dayKey(next.starts_at))}, {time(next.starts_at)}</a>}
+        <a href={letterboxd} class="btn btn-o" target="_blank" rel="noopener noreferrer">Letterboxd<Icon name="ext" /></a>
+      </div>
+    </div>
+  </section>
+
+  {hasStill && <div class="wrap" style="padding-top: 64px"><WideArt film={{ ...film, poster_url: null }} /></div>}
+
+  <section class="wrap sec film-grid">
+    <div style="min-width: 0" class="reveal">
+      <h2 class="t-h2" style="margin-bottom: 20px">Where to watch in Jakarta</h2>
+      {upcoming.length === 0 && <p class="t-body" style="margin-bottom: 24px">No upcoming screenings listed.</p>}
+      <div class="rows">
+        {[...upcoming, ...earlier].map((s) => {
+          const past = s.starts_at < now;
+          const label = statusLabel(s.ticket_status);
+          return (
+            <div class:list={['r r-screen', { dim: past }]}>
+              <span class="t-time">{time(s.starts_at)}</span>
+              <a href={`/screenings/${s.id}`} class="r-film" style="display: block">
+                <span class="t-title" style="display: block">{longDay(dayKey(s.starts_at))}</span>
+                <span class="t-meta" style="display: block">{[s.event?.name, subtitleText(s.subtitles)].filter(Boolean).join(' · ')}</span>
+              </a>
+              <span class="r-where" style="font-size: 15px">{[s.venue?.name, s.screen].filter(Boolean).join(', ')}</span>
+              <span class="r-status">{label && <span class:list={['st', s.ticket_status === 'few_left' ? 'st-few' : 'st-out']}>{label}</span>}</span>
+              <span class="r-action">{past ? <span class="t-small">Shown</span> : <a href={`/screenings/${s.id}`} class="btn btn-o">Details</a>}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+    <div class="card pad reveal">
+      <h2 class="t-h3" style="margin-bottom: 20px">Credits</h2>
+      <dl class="kv">
+        {directors && <><dt>{film.directors && film.directors.length > 1 ? 'Directors' : 'Director'}</dt><dd>{directors}</dd></>}
+        {film.year && <><dt>Year</dt><dd>{film.year}</dd></>}
+        {film.countries?.length ? <><dt>Country</dt><dd>{film.countries.join(', ')}</dd></> : null}
+        {film.runtime_min && <><dt>Runtime</dt><dd>{runtime(film.runtime_min)}</dd></>}
+      </dl>
+      {(film.poster_credit || film.still_credit) && (
+        <p class="t-small" style="margin-top: 24px">{[film.poster_credit, film.still_credit && `Still: ${film.still_credit}`].filter(Boolean).join('. ')}</p>
+      )}
+    </div>
+  </section>
+</Base>

@@ -1,0 +1,19 @@
+---
+// A wide 2.39:1 picture for a film: the still if there is one, otherwise the
+// poster set on a blurred copy of itself. Renders nothing without artwork.
+import type { Film } from '../lib/data';
+import { art } from '../lib/data';
+
+interface Props { film: Film | null | undefined }
+const { film } = Astro.props;
+const a = art(film);
+---
+{a.image && (
+  <figure class="wide-art reveal">
+    <div class:list={['wide-art-frame', a.imageKind]}>
+      {a.imageKind === 'poster' && <img class="bg" src={a.image} alt="" aria-hidden="true" decoding="async" />}
+      <img class="fg" src={a.image} alt={film?.title ? `${film.title}${a.imageKind === 'poster' ? ', poster' : ', still'}` : ''} decoding="async" />
+    </div>
+    {a.credit && <figcaption class="t-small">{a.imageKind === 'still' ? 'Still' : 'Poster'}: {a.credit}</figcaption>}
+  </figure>
+)}

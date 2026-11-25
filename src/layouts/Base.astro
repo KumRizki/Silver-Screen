@@ -6,9 +6,11 @@ import Footer from '../components/Footer.astro';
 interface Props {
   title?: string;
   description?: string;
+  image?: string | null;
 }
 const {
   title,
+  image,
   description = 'An independent guide to special screenings in Jakarta: festivals, cultural-centre screenings, retrospectives and one-night events, with ticket dates.',
 } = Astro.props;
 const fullTitle = title ? `${title} · The Silver Screen` : 'The Silver Screen · Special screenings in Jakarta';
@@ -26,6 +28,8 @@ const fullTitle = title ? `${title} · The Silver Screen` : 'The Silver Screen �
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta name="theme-color" content="#0E0D0C" />
+    {image && <meta property="og:image" content={image} />}
+    <script is:inline>document.documentElement.classList.add('js');</script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -40,5 +44,16 @@ const fullTitle = title ? `${title} · The Silver Screen` : 'The Silver Screen �
       <slot />
     </main>
     <Footer />
+    <script is:inline>
+      // Fade sections in as they scroll into view. Anything already on screen shows at once.
+      (function () {
+        var els = document.querySelectorAll('.reveal');
+        if (!('IntersectionObserver' in window)) { els.forEach(function (e) { e.classList.add('in'); }); return; }
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+        }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+        els.forEach(function (e) { io.observe(e); });
+      })();
+    </script>
   </body>
 </html>

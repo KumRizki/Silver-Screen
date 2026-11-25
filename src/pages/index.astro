@@ -3,7 +3,7 @@ import Base from '../layouts/Base.astro';
 import Hero from '../components/Hero';
 import PosterTile from '../components/PosterTile.astro';
 import Icon from '../components/Icon.astro';
-import { buildSlides, getEvents, getPosts, getScreenings, toListing, type Listing } from '../lib/data';
+import { art, buildSlides, getEvents, getPosts, getScreenings, toListing, type Listing } from '../lib/data';
 import { addDays, dayKey, longDate, longDay, rupiah, shortDay, time } from '../lib/format';
 
 const now = new Date();
@@ -56,6 +56,7 @@ const arthouse = events.find((e) => e.kind === 'series' && e.start_date && e.sta
 const arthouseNext = arthouse
   ? screenings.find((s) => s.event?.slug === arthouse.slug && s.starts_at > now.toISOString())
   : undefined;
+const arthouseArt = art(arthouseNext?.film);
 
 const notes = posts.filter((p) => p.kind === 'note').slice(0, 2);
 const blog = posts.filter((p) => !notes.includes(p)).slice(0, 2);
@@ -70,7 +71,7 @@ const KIND: Record<string, string> = { guide: 'Festival guide', howto: 'How-to',
       <div class="sec-head"><p class="label" style="margin: 0">From the projection room</p><a href="/blog" class="u t-small">All notes</a></div>
       <div class="editorial">
         {notes.map((p) => (
-          <a href={`/blog/${p.slug}`} style="display: block">
+          <a href={`/blog/${p.slug}`} class="reveal" style="display: block">
             <div class="img" style={`aspect-ratio: 4 / 3${p.cover_url ? `; background: url('${p.cover_url}') center / cover` : ''}`}></div>
             <h2 class="t-h2">{p.title}</h2>
             {p.dek && <p class="t-body" style="margin-top: 16px; font-size: 17px">{p.dek}</p>}
@@ -83,7 +84,7 @@ const KIND: Record<string, string> = { guide: 'Festival guide', howto: 'How-to',
 
   {featuredDay && lead && (
     <section class="wrap sec">
-      <div class="sec-head">
+      <div class="sec-head reveal">
         <div><p class="label">{dayLabel}</p><h2 class="t-h1" style="font-size: 64px">{longDay(featuredDay)}</h2></div>
         <a href="/whats-on" class="u" style="color: var(--text-2)">Full calendar</a>
       </div>
@@ -95,9 +96,10 @@ const KIND: Record<string, string> = { guide: 'Festival guide', howto: 'How-to',
         {grid.length > 0 && (
           <div>
             <div class="today-sm">
-              {grid.map((l) => (
+              {grid.map((l, i) => (
                 <PosterTile
                   item={l}
+                  i={i}
                   when={[l.time, l.where.split(', ').slice(-1)[0]].join(' · ')}
                   sub={l.meta}
                 />
@@ -116,17 +118,19 @@ const KIND: Record<string, string> = { guide: 'Festival guide', howto: 'How-to',
 
   {arthouse && (
     <section class="dark band">
-      <div class="band-art" style={arthouseNext?.film?.poster_url ? `background-image: url('${arthouseNext.film.poster_url}')` : undefined}></div>
+      <div class:list={['band-art', { 'poster-art': arthouseArt.imageKind === 'poster' }]}>
+        {arthouseArt.image && <img src={arthouseArt.image} alt="" loading="lazy" decoding="async" />}
+      </div>
       <div class="wrap band-panel">
-        <div>
+        <div class="reveal">
           <p class="label">On the {arthouse.name} screen</p>
-          <h2 class="t-h1">{arthouseNext?.film?.title ?? arthouse.name}</h2>
+          <h2 class="t-h1">{arthouseNext?.film ? <a href={`/screenings/${arthouseNext.id}`}>{arthouseNext.film.title}</a> : arthouse.name}</h2>
           <p class="t-lead" style="margin-top: 20px">
             {arthouse.summary ?? 'One curated film a week.'}
             {arthouseNext && ` Next: ${shortDay(dayKey(arthouseNext.starts_at))}, ${time(arthouseNext.starts_at)}.`}
           </p>
           <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px">
-            <a href="/whats-on" class="btn btn-a">Showtimes</a>
+            <a href={arthouseNext ? `/screenings/${arthouseNext.id}` : '/whats-on'} class="btn btn-a">Showtimes</a>
             <a href="/di-bioskop" class="btn btn-o">Di Bioskop</a>
           </div>
         </div>
@@ -137,7 +141,7 @@ const KIND: Record<string, string> = { guide: 'Festival guide', howto: 'How-to',
   {sales.length > 0 && (
     <section class="wrap sec">
       <p class="label">Ticket sales this week</p>
-      <div class="panel3">
+      <div class="panel3 reveal">
         {sales.map((s) => (
           <div>
             <p class="t-h1" style="font-size: 56px">{shortDay(dayKey(s.tickets_on_sale_at!))}</p>
@@ -157,12 +161,12 @@ const KIND: Record<string, string> = { guide: 'Festival guide', howto: 'How-to',
 
   {comingUp.length > 0 && (
     <section class="sec">
-      <div class="wrap sec-head">
+      <div class="wrap sec-head reveal">
         <div><p class="label">Coming up</p><h2 class="t-h1" style="font-size: 64px">On the calendar</h2></div>
         <a href="/whats-on" class="u" style="color: var(--text-2)">Full calendar</a>
       </div>
       <div class="hscroll">
-        {comingUp.map((l) => <PosterTile item={l} when={shortDay(l.day)} sub={l.where} />)}
+        {comingUp.map((l, i) => <PosterTile item={l} i={i} when={`${shortDay(l.day)} · ${l.time}`} sub={l.eventName ?? l.where} />)}
       </div>
     </section>
   )}
@@ -173,7 +177,7 @@ const KIND: Record<string, string> = { guide: 'Festival guide', howto: 'How-to',
         <div class="sec-head"><p class="label" style="margin: 0">The blog</p><a href="/blog" class="u t-small">All posts</a></div>
         <div class="editorial">
           {blog.map((p) => (
-            <a href={`/blog/${p.slug}`} style="display: block">
+            <a href={`/blog/${p.slug}`} class="reveal" style="display: block">
               <div class="img" style={`aspect-ratio: 3 / 2${p.cover_url ? `; background: url('${p.cover_url}') center / cover` : ''}`}></div>
               <p class="t-small" style="margin-top: 20px">{KIND[p.kind] ?? p.kind} · {postDate(p.published_at)}</p>
               <p class="t-h2" style="margin-top: 8px">{p.title}</p>
@@ -186,7 +190,7 @@ const KIND: Record<string, string> = { guide: 'Festival guide', howto: 'How-to',
   )}
 
   <section id="alerts" class="wrap sec">
-    <div class="alerts">
+    <div class="alerts reveal">
       <h2 class="t-display" style="font-size: 96px">Know when tickets go on sale.</h2>
       <div>
         <p class="t-body">A WhatsApp message the moment sales open, and a short email on Fridays. Alerts open soon.</p>
